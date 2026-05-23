@@ -1,10 +1,12 @@
 use std::borrow::Cow;
+use std::num::NonZeroU16;
 
 use crossterm::Command as _;
 use crossterm::style::{
-    Attribute, Attributes, Print, ResetColor, SetAttributes, SetBackgroundColor, SetForegroundColor,
+    Attribute, Attributes, Print, SetAttributes, SetBackgroundColor, SetForegroundColor,
 };
-use ratatui::style::{Color, Modifier};
+use ratatui::buffer::CellDiffOption;
+use ratatui::style::Modifier;
 use ratatui::text::Span;
 
 use ratatui::prelude::IntoCrossterm as _;
@@ -25,42 +27,34 @@ impl<'a> Osc8Link<'a> {
 }
 
 impl Widget for Osc8Link<'_> {
-    fn render(self, mut area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
         let Ok((sequence, width)) = render_osc8_link(&self.spans, &self.url) else {
             return;
         };
+        let Some(forced_width) = NonZeroU16::new(width as u16) else {
+            return;
+        };
         let Some(cell) = buf.cell_mut(area) else {
             return;
         };
-        cell.set_symbol(&sequence);
-        for x in 1..width {
-            area.x += x as u16;
-            let Some(cell) = buf.cell_mut(area) else {
-                return;
-            };
-            cell.set_skip(true);
-        }
+        cell.set_symbol(&sequence)
+            .set_diff_option(CellDiffOption::ForcedWidth(forced_width));
     }
 }
 
 fn span_to_ansi(span: &Span) -> Result<String, std::fmt::Error> {
     let mut out = String::new();
-    if let Some(fg) = span.style.fg
-        && fg != Color::Reset
-    {
+    if let Some(fg) = span.style.fg {
         SetForegroundColor(fg.into_crossterm()).write_ansi(&mut out)?
     }
-    if let Some(bg) = span.style.bg
-        && bg != Color::Reset
-    {
+    if let Some(bg) = span.style.bg {
         SetBackgroundColor(bg.into_crossterm()).write_ansi(&mut out)?;
     }
     SetAttributes(modifier_to_attributes(span.style.add_modifier)).write_ansi(&mut out)?;
     Print(&span.content).write_ansi(&mut out)?;
-    ResetColor.write_ansi(&mut out)?;
     Ok(out)
 }
 
