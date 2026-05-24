@@ -38,6 +38,11 @@ pub fn view(model: &Model, buf: &mut Buffer) {
         _ => None,
     };
 
+    // This should come from Theme.
+    let highlight_style = Style::default()
+        .fg(Color::Indexed(15))
+        .bg(Color::Indexed(32));
+
     let mut y: i32 = 0 - (model.scroll as i32);
     for section in model.sections() {
         if y + (section.height as i32) < 0 {
@@ -73,60 +78,46 @@ pub fn view(model: &Model, buf: &mut Buffer) {
                             ..
                         } = extra
                         {
-                            for (link_overlay, area) in link_overlays(
-                                line,
-                                *start,
-                                *end,
-                                lines_count,
-                                line_idx,
-                                lines,
-                                inner_area,
-                                line_y,
-                                link_osc8_widget_with_filler(
-                                    model.theme().link_description_style(),
-                                ),
-                                url,
-                            ) {
-                                link_overlay.render(area, buf);
+                            if let Cursor::Links(CursorPointer { .. }) = &model.cursor
+                                && let Some(selected) = &selected_url
+                                && selected.as_ptr() == url.as_ptr()
+                            {
+                                for (link_overlay, area) in link_overlays(
+                                    line,
+                                    *start,
+                                    *end,
+                                    lines_count,
+                                    line_idx,
+                                    lines,
+                                    inner_area,
+                                    line_y,
+                                    link_highlighted(highlight_style),
+                                    url,
+                                ) {
+                                    link_overlay.render(area, buf);
+                                }
+                            } else {
+                                for (link_overlay, area) in link_overlays(
+                                    line,
+                                    *start,
+                                    *end,
+                                    lines_count,
+                                    line_idx,
+                                    lines,
+                                    inner_area,
+                                    line_y,
+                                    link_osc8_widget_with_filler(
+                                        model.theme().link_description_style(),
+                                    ),
+                                    url,
+                                ) {
+                                    link_overlay.render(area, buf);
+                                }
                             }
                         }
                     }
 
-                    // Highlight all links that share the same URL as the selected link
-                    if let Cursor::Links(CursorPointer { .. }) = &model.cursor
-                        && let Some(selected) = &selected_url
-                    {
-                        for extra in extras.iter() {
-                            if let LineExtra::Link {
-                                source: url,
-                                start,
-                                end,
-                                lines: lines_count,
-                                ..
-                            } = extra
-                            {
-                                if url.as_ptr() == selected.as_ptr() {
-                                    for (link_overlay, area) in link_overlays(
-                                        line,
-                                        *start,
-                                        *end,
-                                        lines_count,
-                                        line_idx,
-                                        lines,
-                                        inner_area,
-                                        line_y,
-                                        link_highlighted_widget,
-                                        url,
-                                    ) {
-                                        link_overlay.render(area, buf);
-                                    }
-                                    // TODO: Find out if positioning the cursor on the link
-                                    // would help with screen readers, or anything else in
-                                    // general.
-                                }
-                            }
-                        }
-                    } else if let Cursor::Search(_, pointer) = &model.cursor {
+                    if let Cursor::Search(_, pointer) = &model.cursor {
                         for (i, extra) in extras.iter().enumerate() {
                             if let LineExtra::SearchMatch(start, end, text) = extra {
                                 let x = inner_area.x + (*start as u16);
@@ -356,17 +347,23 @@ where
     overlays
 }
 
-fn link_highlighted_widget<'a>(
-    start: u16,
-    end: u16,
-    display_text: Line<'a>,
-    _url: &'a str,
-) -> (Paragraph<'a>, u16) {
-    let width = end - start;
-    let link_overlay = Paragraph::new(display_text)
-        .fg(Color::Indexed(15))
-        .bg(Color::Indexed(32));
-    (link_overlay, width)
+fn link_highlighted<'a>(
+    style: Style,
+) -> impl Fn(u16, u16, Line<'a>, &'a str) -> (Paragraph<'a>, u16) {
+    move |start, end, mut line, _url| {
+        let width = end - start;
+        let mut width_taken = 0;
+        for span in &mut line.spans {
+            span.style = span.style.patch(style);
+            width_taken += span.width();
+        }
+
+        Osc8Link::fill(&mut line.spans, width as usize - width_taken, style);
+        let p = Paragraph::new(line)
+            .fg(Color::Indexed(15))
+            .bg(Color::Indexed(32));
+        (p, width)
+    }
 }
 
 fn link_osc8_widget_with_filler<'a>(
@@ -436,14 +433,17 @@ mod tests {
             &lines,
             inner_area,
             line_y,
-            link_highlighted_widget,
+            link_highlighted(Style::default()),
             url,
         );
         assert_eq!(
             overlays,
             vec![
                 (
-                    Paragraph::new(Line::from(Span::from("link desc")))
+                    Paragraph::new(Line::from(vec![
+                        Span::from("link desc"),
+                        Span::from("                                                                                    "),
+                    ]))
                         .fg(Color::Indexed(15))
                         .bg(Color::Indexed(32)),
                     Rect::new(17, 0, 93, 1)

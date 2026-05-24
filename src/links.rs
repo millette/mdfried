@@ -31,14 +31,17 @@ impl<'a> Osc8Link<'a> {
             .collect();
         if let Some((fill_width, style)) = fill_width {
             let width: usize = spans.iter().map(|s| s.width()).sum();
-            if width < fill_width as usize {
-                spans.push(Span::from(" ".repeat(fill_width as usize - width)).style(style));
-            }
+            Self::fill(&mut spans, fill_width as usize - width, style);
         }
 
         Self {
             spans,
             url: url.into(),
+        }
+    }
+    pub fn fill(spans: &mut Vec<Span>, width: usize, style: Style) {
+        if width > 0 {
+            spans.push(Span::from(" ".repeat(width)).style(style));
         }
     }
 }
