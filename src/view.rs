@@ -85,7 +85,6 @@ pub fn view(model: &Model, buf: &mut Buffer) {
                                 link_osc8_widget,
                                 url,
                             ) {
-                                log::debug!("render overlay: {url:?}");
                                 link_overlay.render(area, buf);
                             }
                             // TODO: Find out if positioning the cursor on the link
@@ -386,10 +385,7 @@ fn extract_line_content<'a>(line: &Line<'a>, start: u16, end: u16) -> Line<'a> {
     let mut content = Line::default();
     for span in &line.spans {
         if pos >= start {
-            let mut link_span = span.clone();
-            link_span.style.fg = None;
-            link_span.style.bg = None;
-            content.push_span(link_span);
+            content.push_span(span.clone());
         }
 
         let span_width = span.content.width() as u16;

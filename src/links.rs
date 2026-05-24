@@ -3,7 +3,7 @@ use std::num::NonZeroU16;
 
 use crossterm::Command as _;
 use crossterm::style::{
-    Attribute, Attributes, Print, SetAttributes, SetBackgroundColor, SetForegroundColor,
+    Attribute, Attributes, Print, ResetColor, SetAttributes, SetBackgroundColor, SetForegroundColor,
 };
 use ratatui::buffer::CellDiffOption;
 use ratatui::style::Modifier;
@@ -13,6 +13,7 @@ use ratatui::prelude::IntoCrossterm as _;
 use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr as _;
 
+#[derive(Debug)]
 pub struct Osc8Link<'a> {
     spans: Vec<Span<'a>>,
     url: Cow<'a, str>,
@@ -20,7 +21,11 @@ pub struct Osc8Link<'a> {
 impl<'a> Osc8Link<'a> {
     pub fn new<S: Into<Vec<Span<'a>>>, U: Into<Cow<'a, str>>>(spans: S, url: U) -> Self {
         Self {
-            spans: spans.into(),
+            spans: spans
+                .into()
+                .into_iter()
+                .filter(|s| !s.content.is_empty())
+                .collect(),
             url: url.into(),
         }
     }
@@ -55,6 +60,7 @@ fn span_to_ansi(span: &Span) -> Result<String, std::fmt::Error> {
     }
     SetAttributes(modifier_to_attributes(span.style.add_modifier)).write_ansi(&mut out)?;
     Print(&span.content).write_ansi(&mut out)?;
+    ResetColor.write_ansi(&mut out)?;
     Ok(out)
 }
 
