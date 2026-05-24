@@ -3,12 +3,12 @@ use unicode_width::UnicodeWidthStr as _;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Stylize as _},
+    style::{Color, Style, Stylize as _},
     text::{Line, Span},
     widgets::{Block, Paragraph, Widget},
 };
 
-use mdfrier::Mapper as _;
+use mdfrier::{Mapper as _, ratatui::Theme as _};
 use ratatui_image::{
     Image,
     sliced::{SignedPosition, SlicedImage},
@@ -82,14 +82,13 @@ pub fn view(model: &Model, buf: &mut Buffer) {
                                 lines,
                                 inner_area,
                                 line_y,
-                                link_osc8_widget,
+                                link_osc8_widget_with_filler(
+                                    model.theme().link_description_style(),
+                                ),
                                 url,
                             ) {
                                 link_overlay.render(area, buf);
                             }
-                            // TODO: Find out if positioning the cursor on the link
-                            // would help with screen readers, or anything else in
-                            // general.
                         }
                     }
 
@@ -116,7 +115,7 @@ pub fn view(model: &Model, buf: &mut Buffer) {
                                         lines,
                                         inner_area,
                                         line_y,
-                                        link_overlay_widget,
+                                        link_highlighted_widget,
                                         url,
                                     ) {
                                         link_overlay.render(area, buf);
@@ -357,7 +356,7 @@ where
     overlays
 }
 
-fn link_overlay_widget<'a>(
+fn link_highlighted_widget<'a>(
     start: u16,
     end: u16,
     display_text: Line<'a>,
@@ -370,8 +369,13 @@ fn link_overlay_widget<'a>(
     (link_overlay, width)
 }
 
-fn link_osc8_widget<'a>(start: u16, end: u16, line: Line<'a>, url: &'a str) -> (Osc8Link<'a>, u16) {
-    (Osc8Link::new(line.spans, url), end - start)
+fn link_osc8_widget_with_filler<'a>(
+    style: Style,
+) -> impl Fn(u16, u16, Line<'a>, &'a str) -> (Osc8Link<'a>, u16) {
+    move |start, end, line, url| {
+        let width = end - start;
+        (Osc8Link::new(line.spans, url, Some((width, style))), width)
+    }
 }
 
 /// Extract text content from a Line.
@@ -432,7 +436,7 @@ mod tests {
             &lines,
             inner_area,
             line_y,
-            link_overlay_widget,
+            link_highlighted_widget,
             url,
         );
         assert_eq!(
